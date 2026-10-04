@@ -1,16 +1,22 @@
 # InsightGraph 🚀
-> **Autonomous Multi-Agent AI Deep Research & Report Generation Engine**
+> **Autonomous Multi-Agent AI Deep Research Engine with 3D UI & SQLite Session Memory**
 
-InsightGraph is an intelligent research assistant powered by **LangGraph**, **FastAPI**, and **Llama 3.3 (70B)** via Groq. It automatically breaks down topics into targeted research questions, gathers information, evaluates findings, and generates comprehensive markdown reports with real-time progress streaming.
+InsightGraph is an intelligent, autonomous research assistant powered by **LangGraph**, **FastAPI**, **SQLite**, and flexible LLMs via **Groq** (Llama 3.3 70B) or **OpenAI** (GPT-4o / GPT-4o-mini). It automatically breaks down complex topics into targeted research sub-questions, crawls live web data via `ddgs`, evaluates quality scores iteratively, and compiles structured markdown reports with real-time SSE progress streaming.
 
 ---
 
 ## 🌟 Key Features
 
-- 🤖 **Multi-Agent Workflow**: Specialized AI agents work in tandem to process input, generate questions, perform search queries, analyze findings, and write reports.
-- 🔁 **Adaptive Feedback Loop**: Dynamic quality evaluation scores findings after each search cycle to decide whether to iterate further or compile the final report.
-- ⚡ **Real-Time Status Streaming**: Streams node execution states and final outputs to the frontend using **Server-Sent Events (SSE)**.
-- 🎨 **Minimalist UI**: Clean, distraction-free interface built for real-time progress visualization and markdown report viewing.
+- 🤖 **Multi-Agent Orchestration**: Specialized AI agents work in tandem (Input Processor → Question Generator → Web Search → Analyzer & Quality Evaluator → Report Generator).
+- 🎨 **3D Futuristic LangUI Interface**:
+  - **Three.js 3D WebGL Background**: Animated neural particle sphere reacting to mouse movements and accelerating during active research.
+  - **LangUI Components**: Floating glass chat input bar, auto-resizing text area, preset prompt cards with 3D tilt animations, voice dictation (Web Speech API).
+  - **Interactive Report Viewer**: Rich Markdown rendering, one-click copy, `.MD` export, Text-to-Speech read aloud, and confetti celebration fireworks upon report completion.
+- 💾 **SQLite Session Memory**:
+  - Persistent database recording session inputs, timestamps, status, and generated markdown reports.
+  - Sidebar history navigation for loading previous research reports instantly without re-running execution streams.
+- ⚡ **Multi-Provider LLM Support**: Switch between **Groq** and **OpenAI** dynamically via `.env` (`LLM_PROVIDER`, `GROQ_MODEL`, `OPENAI_MODEL`).
+- 📡 **Real-Time Status Streaming**: Streams node execution states and final outputs to the frontend using **Server-Sent Events (SSE)**.
 
 ---
 
@@ -18,22 +24,17 @@ InsightGraph is an intelligent research assistant powered by **LangGraph**, **Fa
 
 ```mermaid
 graph TD
-    Start([User Request]) --> InputProc[1. Input Processor]
+    Start([User Request / Topic]) --> Session[0. SQLite Session Init]
+    Session --> InputProc[1. Input Processor]
     InputProc --> QuesGen[2. Question Generator]
-    QuesGen --> Search[3. Search Tool]
+    QuesGen --> Search[3. Web Search Tool - DDGS]
     Search --> Analyzer[4. Analyzer & Quality Evaluator]
     
     Analyzer -->|Quality Score < 0.8 & Iterations < Max| QuesGen
     Analyzer -->|Quality Met / Max Iterations Reached| Reporter[5. Report Generator]
-    Reporter --> End([Final Report])
+    Reporter --> DBStore[6. Save Report to SQLite DB]
+    DBStore --> End([Final Report Streamed])
 ```
-
-### Agent Roles
-1. **Input Processor**: Normalizes and refines the research topic.
-2. **Question Generator**: Formulates targeted sub-questions for deep investigation.
-3. **Search Tool**: Executes web queries to gather raw data and search results.
-4. **Analyzer**: Synthesizes key findings and calculates a quality score.
-5. **Report Generator**: Formulates a structured, detailed research report in Markdown.
 
 ---
 
@@ -46,16 +47,21 @@ InsightGraph/
 │   ├── input_processor/  # Validates and structures incoming research topic
 │   ├── question_gen/     # Generates multi-angle research questions
 │   ├── report_gen/       # Compiles detailed final report in markdown
-│   ├── search_tool/      # Integrates web search capabilities
+│   ├── search_tool/      # Integrates web search capabilities via ddgs
 │   └── workflow.py       # LangGraph state machine & graph compilation
 ├── frontend/
-│   └── index.html        # Lightweight real-time SSE research UI
-├── config.py             # LLM setup (Groq Llama-3.3-70b-versatile)
-├── main.py               # FastAPI entry point & CORS configuration
-├── routes.py             # SSE endpoint definition (/api/research)
+│   ├── assets/           # 3D generated core visual assets
+│   ├── index.html        # Single Page Application HTML5 structure
+│   ├── style.css         # 3D glassmorphism & LangUI design system
+│   └── app.js            # Three.js 3D canvas, SSE stream controller & speech logic
+├── config.py             # Dynamic LLM provider setup (Groq & OpenAI)
+├── database.py           # SQLite database schema, sessions & memory persistence
+├── main.py               # FastAPI entry point & static file hosting
+├── routes.py             # Session management & SSE research endpoints
 ├── state.py              # TypedDict state structure for LangGraph
+├── requirements.txt      # Python dependencies manifest
 ├── .env.example          # Environment variables template
-├── .gitignore            # Git exclusion definitions
+├── .gitignore            # Git exclusion definitions (excludes .env & *.db)
 └── README.md             # Project documentation
 ```
 
@@ -64,10 +70,12 @@ InsightGraph/
 ## 🛠️ Tech Stack
 
 - **Framework**: FastAPI (Python 3.10+)
-- **Agentic Engine**: LangGraph & LangChain
-- **LLM Provider**: Groq (`llama-3.3-70b-versatile`)
+- **Agentic Engine**: LangGraph & LangChain (`langchain-groq`, `langchain-openai`)
+- **LLM Providers**: Groq (`llama-3.3-70b-versatile`) & OpenAI (`gpt-4o-mini` / `gpt-4o`)
+- **Database**: SQLite3 (`research_sessions.db`)
+- **Search Tool**: `ddgs`
 - **Streaming Protocol**: Server-Sent Events (SSE)
-- **Frontend**: HTML5 / Modern Vanilla CSS / JavaScript
+- **Frontend**: HTML5 / Vanilla CSS3 (3D Glassmorphism) / JavaScript ES6+ / Three.js / Marked.js / DOMPurify / Canvas-Confetti
 
 ---
 
@@ -83,7 +91,7 @@ cd InsightGraph
 ```bash
 python -m venv .venv
 
-# On Windows
+# On Windows (PowerShell)
 .venv\Scripts\activate
 
 # On macOS/Linux
@@ -92,53 +100,68 @@ source .venv/bin/activate
 
 ### 3. Install Dependencies
 ```bash
-pip install fastapi uvicorn langchain-groq langgraph python-dotenv
+pip install -r requirements.txt
 ```
 
 ### 4. Configure Environment Variables
-Create a `.env` file from the provided template:
+Create a `.env` file from `.env.example`:
 ```bash
 cp .env.example .env
 ```
-Add your Groq API Key to `.env`:
+
+Edit `.env` to configure your API keys and provider preferences:
+
+#### Option A: Groq (Default)
 ```env
-GROQ_API_KEY=your_actual_groq_api_key_here
+LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+#### Option B: OpenAI
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-proj-your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
 ```
 
 ---
 
 ## 🏃 Running the Application
 
-### Start Backend API Server
+### Start the Server
 ```bash
 python main.py
 ```
 The server will start at `http://127.0.0.1:8000`.
 
-### Open the Frontend
-Open `frontend/index.html` directly in your web browser, or serve it using any HTTP server:
-```bash
-# Example using Python http.server
-python -m http.server 3000 --directory frontend
-```
+### Open the 3D Interface
+Simply open **`http://127.0.0.1:8000`** in your browser! FastAPI automatically hosts the full 3D interactive frontend.
 
 ---
 
-## 📡 API Endpoint
+## 📡 API Endpoints
 
-### `GET /api/research`
+### 1. `GET /api/research`
 Streams real-time research agent updates using Server-Sent Events (SSE).
-
-* **Query Parameter**: `topic` (string)
+* **Query Parameters**:
+  * `topic` (string, required): Research question or prompt.
+  * `session_id` (string, optional): Session ID to attach execution results to.
 * **Response**: `text/event-stream`
 
-#### Stream Event Examples:
-```json
-data: {"node": "input_processor", "status": "processed"}
-data: {"node": "question_generator", "status": "questions_generated"}
-data: {"node": "analyzer", "status": "analyzed"}
-data: {"done": true, "report": "# Final Research Report..."}
-```
+### 2. `POST /api/sessions`
+Creates a new research session in SQLite.
+* **Body**: `{"topic": "Research question"}`
+* **Response**: `{"session_id": "...", "topic": "...", "status": "created", "created_at": "..."}`
+
+### 3. `GET /api/sessions`
+Retrieves all historical research sessions stored in the SQLite database.
+
+### 4. `GET /api/sessions/{session_id}`
+Retrieves session details and the saved Markdown research report.
+
+### 5. `DELETE /api/sessions/{session_id}`
+Deletes a session and its associated messages from the database.
 
 ---
 

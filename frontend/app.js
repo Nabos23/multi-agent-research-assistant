@@ -1,15 +1,16 @@
 /* ==========================================================================
-   INSIGHT GRAPH - 3D INTERACTIVE APP & AGENT ENGINE
+   INSIGHT GRAPH - 3D INTERACTIVE APP & AGENT ENGINE (DB SESSION PERSISTENCE)
    ========================================================================== */
 
-const API_BASE = "http://localhost:8000/api/research";
+const API_BASE = "http://localhost:8000/api";
 
 // App State
 const state = {
+  activeSessionId: null,
   activeTopic: "",
   isStreaming: false,
   eventSource: null,
-  history: JSON.parse(localStorage.getItem("insight_history") || "[]"),
+  sessions: [],
   currentStepIndex: -1,
   qualityScore: 0.0,
   iterations: 0,
@@ -71,18 +72,18 @@ function playSound(type) {
     const now = audioCtx.currentTime;
     if (type === 'step') {
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, now); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
+      osc.frequency.setValueAtTime(587.33, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
       gain.gain.setValueAtTime(0.08, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
       osc.start(now);
       osc.stop(now + 0.12);
     } else if (type === 'done') {
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
-      osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
-      osc.frequency.setValueAtTime(1046.50, now + 0.3); // C6
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.1);
+      osc.frequency.setValueAtTime(783.99, now + 0.2);
+      osc.frequency.setValueAtTime(1046.50, now + 0.3);
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
       osc.start(now);
@@ -196,12 +197,12 @@ function init3DBackground() {
 }
 
 // ==========================================================================
-// 2. APPLICATION CONTROLLER & UI MANAGEMENT
+// 2. APPLICATION CONTROLLER & DB SESSION MANAGEMENT
 // ==========================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
   init3DBackground();
-  renderHistory();
+  fetchSessions();
   buildPipelineStepper();
   setupEventListeners();
   setupVoiceRecognition();
@@ -237,7 +238,7 @@ function setupEventListeners() {
     e.preventDefault();
     const topic = elements.topicInput.value.trim();
     if (topic && !state.isStreaming) {
-      startResearch(topic);
+      createNewSessionAndResearch(topic);
     }
   });
 
@@ -253,7 +254,7 @@ function setupEventListeners() {
       const topic = card.getAttribute("data-topic");
       if (topic) {
         elements.topicInput.value = topic;
-        startResearch(topic);
+        createNewSessionAndResearch(topic);
       }
     });
   });
@@ -274,7 +275,7 @@ function setupEventListeners() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${state.activeTopic.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_report.md`;
+    a.download = `${(state.activeTopic || "research").replace(/[^a-z0-9]/gi, '_').toLowerCase()}_report.md`;
     a.click();
     URL.revokeObjectURL(url);
   });
@@ -289,7 +290,7 @@ function setupEventListeners() {
   });
 }
 
-// Speech Recognition (Voice Input)
+// Voice Input Integration
 function setupVoiceRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
@@ -348,6 +349,7 @@ function toggleSpeech() {
 
 // Show Hero View
 function showHeroView() {
+  state.activeSessionId = null;
   state.activeTopic = "";
   if (state.eventSource) state.eventSource.close();
   state.isStreaming = false;
@@ -357,13 +359,133 @@ function showHeroView() {
   elements.activeTopicBadge.style.display = "none";
   elements.topicInput.value = "";
   targetParticleSpeed = 0.0015;
+
+  renderHistory();
 }
 
 // ==========================================================================
-// 3. RESEARCH EXECUTION & SSE STREAMING
+// 3. BACKEND SESSION FETCHING & PERSISTENCE
 // ==========================================================================
 
-function startResearch(topic) {
+async function fetchSessions() {
+  try {
+    const res = await fetch(`${API_BASE}/sessions`);
+    if (res.ok) {
+      state.sessions = await res.json();
+      renderHistory();
+    }
+  } catch (err) {
+    console.error("Failed to fetch sessions", err);
+  }
+}
+
+async function createNewSessionAndResearch(topic) {
+  try {
+    const res = await fetch(`${API_BASE}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: topic })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      state.activeSessionId = data.session_id;
+      startResearch(topic, data.session_id);
+    } else {
+      startResearch(topic, null);
+    }
+  } catch (err) {
+    console.warn("Session POST failed, falling back to direct research", err);
+    startResearch(topic, null);
+  }
+}
+
+async function loadSessionDetails(sessionId) {
+  try {
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}`);
+    if (res.ok) {
+      const data = await res.json();
+      state.activeSessionId = data.session_id;
+      state.activeTopic = data.topic;
+
+      elements.heroView.style.display = "none";
+      elements.chatStreamView.style.display = "flex";
+      elements.activeTopicBadge.style.display = "flex";
+      elements.activeTopicBadge.innerHTML = `<span>Topic:</span> <strong>${escapeHtml(data.topic || "Session")}</strong>`;
+
+      elements.userMsgText.textContent = data.topic || "Research Session";
+      elements.userMsgTime.textContent = new Date(data.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      // Mark stepper complete
+      NODES.forEach(n => {
+        const el = document.getElementById(`step-${n.id}`);
+        if (el) el.className = "pipeline-step completed";
+      });
+
+      elements.eventLogDrawer.innerHTML = `<div class="log-entry"><span class="log-node">&lt;Session&gt;</span> <span class="log-msg">Loaded historical session ${sessionId}</span></div>`;
+
+      if (data.final_report) {
+        if (window.marked && window.DOMPurify) {
+          elements.reportMarkdown.innerHTML = DOMPurify.sanitize(marked.parse(data.final_report));
+        } else {
+          elements.reportMarkdown.textContent = data.final_report;
+        }
+        elements.reportCard.classList.add("active");
+      } else {
+        elements.reportMarkdown.textContent = "No final report generated for this session.";
+        elements.reportCard.classList.add("active");
+      }
+      
+      renderHistory();
+    }
+  } catch (err) {
+    console.error("Failed to load session details", err);
+  }
+}
+
+async function deleteSession(sessionId) {
+  try {
+    await fetch(`${API_BASE}/sessions/${sessionId}`, { method: "DELETE" });
+    fetchSessions();
+  } catch (err) {
+    console.error("Failed to delete session", err);
+  }
+}
+
+function renderHistory() {
+  elements.historyList.innerHTML = "";
+  if (state.sessions.length === 0) {
+    elements.historyList.innerHTML = `<li style="font-size:0.78rem; color:var(--text-muted); padding:6px;">No previous sessions found</li>`;
+    return;
+  }
+
+  state.sessions.forEach(item => {
+    const li = document.createElement("li");
+    li.className = "history-item" + (item.session_id === state.activeSessionId ? " active" : "");
+    const titleText = item.topic || `Session ${item.session_id.substring(0, 8)}`;
+    
+    li.innerHTML = `
+      <span title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</span>
+      <button class="delete-btn" title="Delete Session">✕</button>
+    `;
+
+    li.querySelector("span").addEventListener("click", () => {
+      loadSessionDetails(item.session_id);
+    });
+
+    li.querySelector(".delete-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteSession(item.session_id);
+    });
+
+    elements.historyList.appendChild(li);
+  });
+}
+
+// ==========================================================================
+// 4. RESEARCH STREAMING EXECUTION
+// ==========================================================================
+
+function startResearch(topic, sessionId) {
   state.activeTopic = topic;
   state.isStreaming = true;
   state.qualityScore = 0.45;
@@ -390,12 +512,20 @@ function startResearch(topic) {
   addLogEntry("system", "Connecting to autonomous LangGraph pipeline...");
 
   // Open SSE Connection
-  const url = `${API_BASE}?topic=${encodeURIComponent(topic)}`;
+  let url = `${API_BASE}/research?topic=${encodeURIComponent(topic)}`;
+  if (sessionId) {
+    url += `&session_id=${encodeURIComponent(sessionId)}`;
+  }
+
   state.eventSource = new EventSource(url);
 
   state.eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+
+      if (data.session_id && !state.activeSessionId) {
+        state.activeSessionId = data.session_id;
+      }
 
       if (data.done) {
         finishResearch(data.report);
@@ -412,7 +542,7 @@ function startResearch(topic) {
 
   state.eventSource.onerror = (err) => {
     console.error("SSE Connection Error", err);
-    addLogEntry("error", "Connection failed. Please check backend API server at localhost:8000.");
+    addLogEntry("error", "Connection failed. Check backend API at localhost:8000.");
     state.isStreaming = false;
     elements.sendBtn.disabled = false;
     targetParticleSpeed = 0.0015;
@@ -423,12 +553,10 @@ function startResearch(topic) {
 function updateStepProgress(nodeName, status) {
   playSound('step');
   
-  // Find step index
   const index = NODES.findIndex(n => n.id === nodeName || nodeName.includes(n.id));
   if (index !== -1) {
     state.currentStepIndex = index;
 
-    // Update Stepper Badges
     NODES.forEach((n, i) => {
       const el = document.getElementById(`step-${n.id}`);
       if (!el) return;
@@ -442,7 +570,6 @@ function updateStepProgress(nodeName, status) {
     });
   }
 
-  // Update Telemetry stats
   state.qualityScore = Math.min(0.98, state.qualityScore + 0.12);
   elements.qualityScoreEl.textContent = `${Math.round(state.qualityScore * 100)}%`;
   elements.iterationCountEl.textContent = state.iterations;
@@ -482,7 +609,6 @@ function finishResearch(reportContent) {
 
   if (state.eventSource) state.eventSource.close();
 
-  // Mark all steps complete
   NODES.forEach(n => {
     const el = document.getElementById(`step-${n.id}`);
     if (el) el.className = "pipeline-step completed";
@@ -491,7 +617,6 @@ function finishResearch(reportContent) {
   elements.qualityScoreEl.textContent = "98%";
   addLogEntry("system", "Research process completed successfully!");
 
-  // Render Markdown Report safely
   if (window.marked && window.DOMPurify) {
     elements.reportMarkdown.innerHTML = DOMPurify.sanitize(marked.parse(reportContent));
   } else {
@@ -501,7 +626,6 @@ function finishResearch(reportContent) {
   elements.reportCard.classList.add("active");
   elements.reportCard.scrollIntoView({ behavior: 'smooth' });
 
-  // Trigger Confetti fireworks celebration
   if (window.confetti) {
     window.confetti({
       particleCount: 80,
@@ -510,65 +634,8 @@ function finishResearch(reportContent) {
     });
   }
 
-  // Save to history
-  saveToHistory(state.activeTopic, reportContent);
-}
-
-// ==========================================================================
-// 4. LOCAL HISTORY MANAGEMENT
-// ==========================================================================
-
-function saveToHistory(topic, report) {
-  const existingIndex = state.history.findIndex(h => h.topic === topic);
-  if (existingIndex !== -1) {
-    state.history.splice(existingIndex, 1);
-  }
-  
-  state.history.unshift({
-    id: Date.now(),
-    topic: topic,
-    report: report,
-    date: new Date().toLocaleDateString()
-  });
-
-  if (state.history.length > 20) state.history.pop();
-  localStorage.setItem("insight_history", JSON.stringify(state.history));
-  renderHistory();
-}
-
-function renderHistory() {
-  elements.historyList.innerHTML = "";
-  if (state.history.length === 0) {
-    elements.historyList.innerHTML = `<li style="font-size:0.78rem; color:var(--text-muted); padding:6px;">No research history yet</li>`;
-    return;
-  }
-
-  state.history.forEach(item => {
-    const li = document.createElement("li");
-    li.className = "history-item";
-    li.innerHTML = `
-      <span>${escapeHtml(item.topic)}</span>
-      <button class="delete-btn" title="Delete">✕</button>
-    `;
-
-    li.querySelector("span").addEventListener("click", () => {
-      elements.topicInput.value = item.topic;
-      startResearch(item.topic);
-    });
-
-    li.querySelector(".delete-btn").addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteHistoryItem(item.id);
-    });
-
-    elements.historyList.appendChild(li);
-  });
-}
-
-function deleteHistoryItem(id) {
-  state.history = state.history.filter(h => h.id !== id);
-  localStorage.setItem("insight_history", JSON.stringify(state.history));
-  renderHistory();
+  // Refresh sessions list from DB
+  fetchSessions();
 }
 
 // Utility

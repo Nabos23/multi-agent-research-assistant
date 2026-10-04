@@ -1,5 +1,4 @@
 # Environment variables
-.env
 
 # Python virtual environment
 .venv/
@@ -20,7 +19,6 @@ __pycache__/
 research_sessions.db
 
 # IDEs and Editors
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -32,3 +30,8 @@ research_sessions.db
 .DS_Store
 Thumbs.db
 
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+config.bat
+node_modules

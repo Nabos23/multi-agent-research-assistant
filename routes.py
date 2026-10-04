@@ -50,6 +50,7 @@ def research(topic: str, session_id: Optional[str] = None):
             "research_questions": [],
             "search_queries": [],
             "search_results": [],
+            "sources": [],
             "key_findings": [],
             "iteration": 0,
             "max_iterations": 2,

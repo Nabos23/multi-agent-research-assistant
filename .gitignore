@@ -13,6 +13,12 @@ __pycache__/
 *$py.class
 *.so
 
+# Databases & SQLite
+*.db
+*.sqlite
+*.sqlite3
+research_sessions.db
+
 # IDEs and Editors
 .vscode/
 .idea/
@@ -25,3 +31,4 @@ __pycache__/
 # OS generated files
 .DS_Store
 Thumbs.db
+

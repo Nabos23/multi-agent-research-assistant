@@ -1,7 +1,8 @@
 import os
 from state import ResearchState
 import json
-from duckduckgo_search import DDGS
+from ddgs import DDGS
+
 
 class search_tool:
     

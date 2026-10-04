@@ -5,8 +5,8 @@ from duckduckgo_search import DDGS
 
 class search_tool:
     
-    def __init__(self):
-
+    def __init__(self, llm=None):
+        self.llm = llm
         pass
 
     def search_tool_node(self, state: ResearchState):

@@ -1,266 +1,227 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Research Assistant</title>
-<style>
-  :root {
-    --ink: #1c1b19;
-    --paper: #f4f1ea;
-    --line: #d8d3c6;
-    --accent: #b5512f;
-    --muted: #8a8475;
-    --done: #4c6b4f;
-  }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InsightGraph | Autonomous AI Deep Research Engine</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
 
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: "Courier New", monospace;
-    display: flex;
-    justify-content: center;
-    padding: 48px 20px;
-  }
-
-  main {
-    width: 100%;
-    max-width: 640px;
-  }
-
-  h1 {
-    font-size: 1.1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    margin: 0 0 4px;
-  }
-
-  .sub {
-    color: var(--muted);
-    font-size: 0.85rem;
-    margin: 0 0 32px;
-  }
-
-  form {
-    display: flex;
-    gap: 0;
-    border: 1px solid var(--ink);
-  }
-
-  input[type="text"] {
-    flex: 1;
-    border: none;
-    background: transparent;
-    padding: 14px 16px;
-    font-family: inherit;
-    font-size: 0.95rem;
-    color: var(--ink);
-  }
-
-  input[type="text"]:focus {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-  }
-
-  button {
-    border: none;
-    border-left: 1px solid var(--ink);
-    background: var(--ink);
-    color: var(--paper);
-    padding: 14px 22px;
-    font-family: inherit;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-  }
-
-  button:disabled {
-    background: var(--muted);
-    cursor: not-allowed;
-  }
-
-  /* pipeline trace */
-  .trace {
-    margin-top: 36px;
-    border-left: 1px solid var(--line);
-    padding-left: 20px;
-    display: none;
-  }
-
-  .trace.active { display: block; }
-
-  .step {
-    position: relative;
-    padding: 4px 0 4px 0;
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
-
-  .step::before {
-    content: "";
-    position: absolute;
-    left: -25px;
-    top: 10px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--line);
-  }
-
-  .step.live {
-    color: var(--ink);
-  }
-
-  .step.live::before {
-    background: var(--accent);
-    box-shadow: 0 0 0 3px rgba(181, 81, 47, 0.18);
-  }
-
-  .step.complete::before {
-    background: var(--done);
-  }
-
-  /* report output */
-  .report {
-    margin-top: 36px;
-    padding-top: 24px;
-    border-top: 1px solid var(--line);
-    display: none;
-    white-space: pre-wrap;
-    font-size: 0.9rem;
-    line-height: 1.6;
-  }
-
-  .report.active { display: block; }
-
-  .report h2 {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    margin: 0 0 16px;
-  }
-
-  .error {
-    margin-top: 20px;
-    color: var(--accent);
-    font-size: 0.85rem;
-    display: none;
-  }
-</style>
+  <!-- External CDN Libraries for 3D & Markdown -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
-<main>
-  <h1>Research Assistant</h1>
-  <p class="sub">enter a topic — the pipeline runs, then a report</p>
+  <!-- WebGL 3D Background Canvas -->
+  <canvas id="three-canvas"></canvas>
 
-  <form id="research-form">
-    <input type="text" id="topic-input" placeholder="e.g. Benefits of LangGraph for AI agents" autocomplete="off" required>
-    <button type="submit" id="submit-btn">Run</button>
-  </form>
+  <div id="app">
+    <!-- Sidebar Navigation (LangUI Component) -->
+    <aside class="sidebar" id="sidebar">
+      <div>
+        <div class="brand-header">
+          <div class="brand-3d-orb">
+            <img src="assets/ai_brain.png" alt="3D AI Core">
+          </div>
+          <div class="brand-text">
+            <h1>InsightGraph</h1>
+            <span>AI Deep Research</span>
+          </div>
+        </div>
 
-  <div class="trace" id="trace"></div>
-  <p class="error" id="error"></p>
+        <button class="new-topic-btn" id="new-topic-btn">
+          <span>✨</span> New Research Topic
+        </button>
 
-  <div class="report" id="report">
-    <h2>Final Report</h2>
-    <div id="report-text"></div>
+        <div class="history-section">
+          <div class="history-title">Recent Investigations</div>
+          <ul class="history-list" id="history-list">
+            <!-- Dynamically populated -->
+          </ul>
+        </div>
+      </div>
+
+      <!-- Agent Telemetry Widget -->
+      <div class="telemetry-card">
+        <div class="telemetry-header">
+          <span>Telemetry</span>
+          <div class="status-indicator">
+            <div class="pulse-dot"></div>
+            <span>LangGraph Engine</span>
+          </div>
+        </div>
+        <div class="telemetry-stats">
+          <div class="stat-box">
+            <span>Quality Score</span>
+            <strong id="quality-score-val">0%</strong>
+          </div>
+          <div class="stat-box">
+            <span>Loop Iteration</span>
+            <strong id="iteration-count-val">0</strong>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace View -->
+    <main class="main-view">
+      <!-- Top Navigation Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-toggle" id="mobile-toggle">☰</button>
+          <div class="topic-badge" id="active-topic-badge" style="display: none;">
+            <!-- Topic text populated dynamically -->
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button class="action-btn-icon" id="sound-toggle-btn" title="Toggle Sound Effects">🔔</button>
+        </div>
+      </header>
+
+      <!-- Scrollable Workspace Content Area -->
+      <div class="content-area">
+        
+        <!-- HERO / WELCOME VIEW (3D Graphic Showcase) -->
+        <section class="hero-container" id="hero-view">
+          <div class="hero-3d-wrapper">
+            <img src="assets/hero_3d.png" alt="3D AI Research Core" class="hero-3d-img">
+          </div>
+          <h1 class="hero-title">Autonomous AI Deep Research Engine</h1>
+          <p class="hero-subtitle">
+            Enter any complex topic. InsightGraph deploys a multi-agent LangGraph pipeline to formulate targeted sub-questions, crawl live search findings, assess quality scores, and compile a comprehensive report.
+          </p>
+
+          <!-- 3D Prompt Cards Grid (LangUI Preset Starters) -->
+          <div class="prompt-grid">
+            <div class="prompt-card" data-topic="Quantum Computing breakthroughs in 2026 and commercial timeline">
+              <div class="prompt-icon">⚛️</div>
+              <h3>Quantum Computing 2026</h3>
+              <p>Breakthroughs in error correction, fault-tolerant qubits, and enterprise deployment timelines.</p>
+            </div>
+            
+            <div class="prompt-card" data-topic="LangGraph vs AutoGen: Multi-Agent AI Framework Benchmark">
+              <div class="prompt-icon">🤖</div>
+              <h3>LangGraph vs AutoGen</h3>
+              <p>Architectural benchmark, state persistence, memory scaling, and production readiness.</p>
+            </div>
+
+            <div class="prompt-card" data-topic="Solid-State Batteries vs Lithium-Ion for EV Energy Storage">
+              <div class="prompt-icon">⚡</div>
+              <h3>Solid-State Batteries</h3>
+              <p>Energy density, thermal safety, manufacturing cost curves, and automaker roadmaps.</p>
+            </div>
+
+            <div class="prompt-card" data-topic="Generative AI in Oncology & Drug Discovery Pipelines 2026">
+              <div class="prompt-icon">🧬</div>
+              <h3>AI Drug Discovery</h3>
+              <p>Molecular design, protein folding, phase 1 clinical trials, and regulatory landscape.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- CHAT & PIPELINE STREAM VIEW -->
+        <section class="chat-stream-container" id="chat-stream-view" style="display: none;">
+          
+          <!-- User Prompt Card -->
+          <div class="user-msg-card">
+            <div class="user-avatar">YOU</div>
+            <div class="user-msg-content">
+              <header>
+                <strong>Research Request</strong>
+                <time id="user-msg-time">Just now</time>
+              </header>
+              <div class="user-msg-text" id="user-msg-text"></div>
+            </div>
+          </div>
+
+          <!-- Dynamic 3D Agent Pipeline Execution Card -->
+          <div class="agent-execution-card">
+            <div class="agent-card-header">
+              <div class="agent-title-box">
+                <img src="assets/agent_avatar.png" alt="Agent Avatar" class="agent-3d-avatar">
+                <div class="agent-info">
+                  <h2>Multi-Agent Workflow Execution</h2>
+                  <p>Streaming real-time execution node graph over SSE</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dynamic Stepper Component -->
+            <div class="pipeline-stepper" id="pipeline-stepper">
+              <!-- Dynamically populated steps -->
+            </div>
+
+            <!-- Event Logs Terminal Drawer -->
+            <div class="event-log-drawer" id="event-log-drawer">
+              <!-- Dynamically logged events -->
+            </div>
+          </div>
+
+          <!-- Final Generated Report Stream Card (LangUI Markdown Viewer) -->
+          <article class="report-card" id="report-card">
+            <div class="report-header">
+              <div class="report-title-group">
+                <span>📄</span>
+                <h2>Comprehensive Research Report</h2>
+              </div>
+              <div class="report-actions">
+                <button class="report-btn" id="copy-report-btn">📋 Copy</button>
+                <button class="report-btn" id="download-report-btn">💾 Export .MD</button>
+                <button class="report-btn" id="speak-report-btn">🔊 Read Aloud</button>
+              </div>
+            </div>
+
+            <!-- Markdown Render Target -->
+            <div class="markdown-body" id="report-markdown"></div>
+          </article>
+
+        </section>
+
+      </div>
+
+      <!-- FLOATING DYNAMIC CHAT INPUT BAR (LangUI Standard Component) -->
+      <div class="chat-input-wrapper">
+        <div class="chat-input-box">
+          <form class="chat-form" id="chat-form">
+            <div class="input-row">
+              <textarea 
+                id="topic-input" 
+                class="chat-textarea" 
+                placeholder="Ask InsightGraph to research any topic or question..." 
+                rows="1"
+                required></textarea>
+              
+              <button type="button" class="mic-btn" id="mic-btn" title="Voice Dictation">🎙️</button>
+              
+              <button type="submit" class="send-btn" id="send-btn" title="Run Research Pipeline">
+                ➔
+              </button>
+            </div>
+
+            <div class="input-controls">
+              <div class="pills-group">
+                <span class="pill">⚡ Groq Llama 3.3 70B</span>
+                <span class="pill">🤖 LangGraph Multi-Agent</span>
+                <span class="pill">📡 Real-Time SSE Stream</span>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </main>
   </div>
-</main>
 
-<script>
-  const API_URL = "http://localhost:8000/api/research";
-
-  const form = document.getElementById("research-form");
-  const input = document.getElementById("topic-input");
-  const submitBtn = document.getElementById("submit-btn");
-  const trace = document.getElementById("trace");
-  const errorBox = document.getElementById("error");
-  const reportBox = document.getElementById("report");
-  const reportText = document.getElementById("report-text");
-
-  // friendly labels for each backend node/status name
-  const STEP_LABELS = {
-    topic_processed: "Refining topic",
-    questions_generated: "Generating research questions",
-    search_completed: "Searching sources",
-    analysis_completed: "Analyzing findings",
-    report_completed: "Writing report",
-  };
-
-  function resetUI() {
-    trace.innerHTML = "";
-    trace.classList.remove("active");
-    reportBox.classList.remove("active");
-    errorBox.style.display = "none";
-    reportText.textContent = "";
-  }
-
-  function addStep(status) {
-    // mark any currently-live step as complete
-    const live = trace.querySelector(".step.live");
-    if (live) {
-      live.classList.remove("live");
-      live.classList.add("complete");
-    }
-
-    const label = STEP_LABELS[status] || status;
-    const el = document.createElement("div");
-    el.className = "step live";
-    el.textContent = label;
-    trace.appendChild(el);
-  }
-
-  function finishSteps() {
-    const live = trace.querySelector(".step.live");
-    if (live) {
-      live.classList.remove("live");
-      live.classList.add("complete");
-    }
-  }
-
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const topic = input.value.trim();
-    if (!topic) return;
-
-    resetUI();
-    trace.classList.add("active");
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Running…";
-
-    const url = `${API_URL}?topic=${encodeURIComponent(topic)}`;
-    const source = new EventSource(url);
-
-    source.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.done) {
-        finishSteps();
-        reportText.textContent = data.report;
-        reportBox.classList.add("active");
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Run";
-        source.close();
-        return;
-      }
-
-      addStep(data.status);
-    };
-
-    source.onerror = () => {
-      errorBox.textContent = "Connection lost — is the backend running on localhost:8000?";
-      errorBox.style.display = "block";
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Run";
-      source.close();
-    };
-  });
-</script>
-
+  <!-- App Script -->
+  <script src="app.js"></script>
 </body>
 </html>

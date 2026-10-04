@@ -1,0 +1,27 @@
+# Environment variables
+.env
+
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
